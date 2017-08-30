@@ -8,4 +8,5 @@ Initialization requires 3 parameters, *psyHost*, *apiHost*, and
 * *apiHost*: The hostname where to contact the eSS api REST server.
 * *website*: The hostname id of the eSS website.
 
+
     let psyloc = require('psyloc')(psyHost,apiHost,website);
