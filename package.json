@@ -8,9 +8,16 @@
     "request": "x"
   },
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/waTeim/psyloc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/waTeim/psyloc/issues"
+  },
   "scripts": {
     "test": "mocha"
   },
-  "author": "Jeff Waller",
+  "author": "Jeff Waller <truthset@gmail.com>",
   "license": "MIT"
 }
