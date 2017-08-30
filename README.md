@@ -15,3 +15,7 @@ Then require psyloc with those parameters.
 # Example
 
     let psyloc = require('localhost','api-dev.esecuresend.com','dev.esecuresend.com');
+
+# Test
+
+    platform=dev npm test
