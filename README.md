@@ -1,4 +1,4 @@
-# Psyloc, a client side for psylo
+# psyloc: a client side for psylo
 
 # Usage
 
