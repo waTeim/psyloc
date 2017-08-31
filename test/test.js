@@ -141,11 +141,25 @@ describe('Regression Tests',function()
       catch(e) { done(e); }
     });
   });
-  it('send file',function(done)
+  it('send unencrypted file',function(done)
   {
     let path = __dirname + "/testfile.x";
 
-    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0",path).then(function(res)
+    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0",false,path).then(function(res)
+    {
+      try
+      {
+        expect(res).to.not.equal(null);
+        done();
+      }
+      catch(e) { done(e); }
+    });
+  });
+  it('send encrypted file',function(done)
+  {
+    let path = __dirname + "/testfile.x";
+
+    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0",true,path).then(function(res)
     {
       try
       {

@@ -85,13 +85,14 @@ const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,toke
   if(keys != null) body.keys = keys;
   if(peers != null) body.peers = peers;
   if(torrentName != null) body.torrentName = torrentName;
+
   return yield addFilesRequest(url,body,auth);
 });
 
 const checkSend = Promise.coroutine(function*(url,fileSpecList,isEncrypted,auth) { return yield preFlightRequest(url,{ fileSpecList:fileSpecList, isEncrypted:isEncrypted },auth); });
 const checkReceive = Promise.coroutine(function*(url,sourceSize,isEncrypted,auth) { return yield preFlightRequest(url,{ sourceSize:sourceSize, isEncrypted:isEncrypted },auth); });
 
-const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelId,serverIdentity,fileInfo)
+const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelId,encrypted,serverIdentity,fileInfo)
 {
   let credentials =
   { 
@@ -106,7 +107,7 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
     recipientIds:[],
     files:[ { fileName:fileInfo.path, fileSize:"" + fileInfo.size }],
     memoTitle:"test",
-    encrypted:false
+    encrypted:encrypted
   }
   let body = { credentials:credentials, transaction:transaction };
 
@@ -247,7 +248,7 @@ module.exports = function(psyHost,apiHost,website)
     catch(e) { return null; }
   });
 
-  const _getTransactionForChannelSend = Promise.coroutine(function*(groupName,channelName,path,tokenInfo)
+  const _getTransactionForChannelSend = Promise.coroutine(function*(groupName,channelName,encrypted,path,tokenInfo)
   {
     try
     {
@@ -268,16 +269,23 @@ module.exports = function(psyHost,apiHost,website)
          if(channels.labelValues[i].label == channelName) channelInfo = channels.labelValues[i];
       }
       if(channelInfo == null) return null;
-      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelInfo.id,serverIdentity.identity,fileInfo);
+      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelInfo.id,encrypted,serverIdentity.identity,fileInfo);
     }
     catch(e) { return null; }
   });
 
-  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,path)
+  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,encrypted,path)
   {
     let tokenInfo = yield _getToken();
-    let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,path,tokenInfo);
-    return yield _addFiles([ path ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,transactionInfo.keys,transactionInfo.peers);
+    let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,encrypted,path,tokenInfo);
+    let keys = [];
+
+    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    {
+      for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
+    }
+
+    return yield _addFiles([ path ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
   });
 
   return {
