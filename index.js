@@ -69,6 +69,7 @@ const addFilesRequest = Promise.promisify(function(url,body,auth,callback) { mkP
 const deleteTorrentRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'deleteTorrent',body,auth,callback); });
 const getChannelsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/channels',body,callback); });
 const getGroupsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/list',body,callback); });
+const getReceiversRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/receivers',body,callback); });
 const getServerIdentity = Promise.promisify(function(url,callback) { mkPsyloGetRequest(url + 'getServerIdentity',callback); });
 const getTokenRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getToken',body,auth,callback); });
 const getTorrentInfoRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getTorrentInfo',body,auth,callback); });
@@ -92,7 +93,7 @@ const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,toke
 const checkSend = Promise.coroutine(function*(url,fileSpecList,isEncrypted,auth) { return yield preFlightRequest(url,{ fileSpecList:fileSpecList, isEncrypted:isEncrypted },auth); });
 const checkReceive = Promise.coroutine(function*(url,sourceSize,isEncrypted,auth) { return yield preFlightRequest(url,{ sourceSize:sourceSize, isEncrypted:isEncrypted },auth); });
 
-const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelId,encrypted,serverIdentity,fileInfo)
+const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelIds,recipientIds,title,encrypted,serverIdentity,fileInfo)
 {
   let credentials =
   { 
@@ -102,13 +103,14 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
   };
   let transaction =
   { 
-    groupMaskId:groupId,
-    channelIds:[ channelId ],
-    recipientIds:[],
+    channelIds:channelIds,
+    encrypted:encrypted,
     files:[ { fileName:fileInfo.path, fileSize:"" + fileInfo.size }],
-    memoTitle:"test",
-    encrypted:encrypted
+    groupMaskId:groupId,
+    memoTitle:title,
+    recipientIds:recipientIds
   }
+
   let body = { credentials:credentials, transaction:transaction };
 
   return yield getTransactionRequest(url,body);
@@ -130,6 +132,12 @@ const getFileInfo = Promise.coroutine(function*(path)
 });
 
 const getGroups = Promise.coroutine(function*(url,site,token) { return yield getGroupsRequest(url,{ credentials:{ token:token }, target:site}); });
+
+const getReceivers = Promise.coroutine(function*(url,token,groupId)
+{ 
+  return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId });
+});
+
 const getToken = Promise.coroutine(function*(url,infoHash,auth) { return yield getTokenRequest(url,{},auth); });
 const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return yield getTorrentInfoRequest(url,{ infoHash:infoHash },auth); });
 const getTorrentList = Promise.coroutine(function*(url,auth) { return yield getTorrentListRequest(url,{},auth); });
@@ -223,6 +231,19 @@ module.exports = function(psyHost,apiHost,website)
     catch(e) { return null; }
   });
 
+  const _getReceivers = Promise.coroutine(function*(groupName,tokenInfo)
+  {
+    try
+    {
+      if(tokenInfo == null) tokenInfo = yield _getToken();
+
+      let groupInfo = yield _findGroup(groupName,tokenInfo);
+
+      if(groupInfo == null) return null;
+      return yield getReceivers("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
+    }
+    catch(e) { return null; }
+  });
 
   const _getServerIdentity = Promise.coroutine(function*()
   {
@@ -248,7 +269,7 @@ module.exports = function(psyHost,apiHost,website)
     catch(e) { return null; }
   });
 
-  const _getTransactionForChannelSend = Promise.coroutine(function*(groupName,channelName,encrypted,path,tokenInfo)
+  const _getTransactionForSend = Promise.coroutine(function*(group,channelName,recipientIds,title,encrypted,path,tokenInfo)
   {
     try
     {
@@ -256,30 +277,73 @@ module.exports = function(psyHost,apiHost,website)
 
       let serverIdentity = yield _getServerIdentity();
       let fileInfo = yield getFileInfo(path);
-      let groupInfo = yield _findGroup(groupName,tokenInfo);
+      let groupInfo = group.groupInfo;
+      let channelInfo;
+      let channelIds = [];
 
+      if(groupInfo == null && group.groupName != null) groupInfo = yield _findGroup(group.groupName,tokenInfo);
       if(groupInfo == null) return null;
 
       let channels = yield getChannels("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
-      let channelInfo;
 
-      if(channels == null || channels.labelValues == null) return null;
-      for(let i = 0;i < channels.labelValues.length;i++)
+      if(channelName != "")
       {
-         if(channels.labelValues[i].label == channelName) channelInfo = channels.labelValues[i];
+        if(channels == null || channels.labelValues == null) return null;
+        for(let i = 0;i < channels.labelValues.length;i++)
+        {
+           if(channels.labelValues[i].label == channelName) channelInfo = channels.labelValues[i];
+        }
+        if(channelInfo == null) return null;
+        channelIds.push(channelInfo.id);
       }
-      if(channelInfo == null) return null;
-      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelInfo.id,encrypted,serverIdentity.identity,fileInfo);
+      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelIds,recipientIds,title,encrypted,serverIdentity.identity,fileInfo);
     }
-    catch(e) { return null; }
+    catch(e) { console.log(e); return null; }
   });
 
-  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,encrypted,path)
+  const _getTransactionForChannelSend = Promise.coroutine(function*(groupName,channelName,title,encrypted,path,tokenInfo)
+  {
+    return _getTransactionForSend({ groupName:groupName },channelName,[],title,encrypted,path,tokenInfo);
+  });
+
+  const _getTransactionForSendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,path,tokenInfo)
+  {
+
+    let groupInfo = yield _findGroup(groupName,tokenInfo);
+
+    if(groupInfo == null) return null;
+
+    let receivers = yield getReceivers("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
+    let receiverIds = [];
+
+    if(receivers == null || receivers.labelValues == null) return null;
+    for(let i = 0;i < receivers.labelValues.length;i++) receiverIds.push(receivers.labelValues[i].id);
+
+    return _getTransactionForSend({ groupInfo:groupInfo },"",receiverIds,title,encrypted,path,tokenInfo);
+  });
+
+  const _sendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,path)
   {
     let tokenInfo = yield _getToken();
-    let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,encrypted,path,tokenInfo);
+    let transactionInfo = yield _getTransactionForSendToAllReceivers(groupName,title,encrypted,path,tokenInfo);
     let keys = [];
 
+    if(transactionInfo == null) return null;
+    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    {
+      for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
+    }
+
+    return yield _addFiles([ path ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
+  });
+
+  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,title,encrypted,path)
+  {
+    let tokenInfo = yield _getToken();
+    let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,title,encrypted,path,tokenInfo);
+    let keys = [];
+
+    if(transactionInfo == null) return null;
     if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
     {
       for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
@@ -298,10 +362,12 @@ module.exports = function(psyHost,apiHost,website)
     getChannels:_getChannels,
     getGroups:_getGroups,
     getFileInfo:getFileInfo,
+    getReceivers:_getReceivers,
     getServerIdentity:_getServerIdentity,
     getToken:_getToken,
     getTorrentInfo:_getTorrentInfo,
     getTorrentList:_getTorrentList,
+    sendToAllReceivers:_sendToAllReceivers,
     sendViaChannel:_sendViaChannel
   }
 };

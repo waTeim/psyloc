@@ -141,11 +141,24 @@ describe('Regression Tests',function()
       catch(e) { done(e); }
     });
   });
+  it('get psylo integration receivers',function(done)
+  {
+    psyloc.getReceivers("PSYLO INTEGRATION").then(function(res)
+    {
+      try
+      {
+        expect(res).to.not.equal(null);
+        expect(res.success).to.equal(true);
+        done();
+      }
+      catch(e) { done(e); }
+    });
+  });
   it('send unencrypted file',function(done)
   {
     let path = __dirname + "/testfile.x";
 
-    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0",false,path).then(function(res)
+    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0","test",false,path).then(function(res)
     {
       try
       {
@@ -159,7 +172,21 @@ describe('Regression Tests',function()
   {
     let path = __dirname + "/testfile.x";
 
-    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0",true,path).then(function(res)
+    psyloc.sendViaChannel("PSYLO INTEGRATION","send to ub0","test",true,path).then(function(res)
+    {
+      try
+      {
+        expect(res).to.not.equal(null);
+        done();
+      }
+      catch(e) { done(e); }
+    });
+  });
+  it('send encrypted file',function(done)
+  {
+    let path = __dirname + "/testfile.x";
+
+    psyloc.sendToAllReceivers("PSYLO INTEGRATION","test",true,path).then(function(res)
     {
       try
       {
