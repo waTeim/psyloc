@@ -30,6 +30,7 @@ const addFiles = Promise.coroutine(function*(fileSpecList,externalTransactionID,
 
 describe('Regression Tests',function()
 {
+/*
   it('get identity',function(done)
   {
     psyloc.getServerIdentity().then(function(res)
@@ -154,7 +155,7 @@ describe('Regression Tests',function()
       catch(e) { done(e); }
     });
   });
-  it('send unencrypted file',function(done)
+  it('send unencrypted file via channel',function(done)
   {
     let path = __dirname + "/testfile.x";
 
@@ -168,7 +169,7 @@ describe('Regression Tests',function()
       catch(e) { done(e); }
     });
   });
-  it('send encrypted file',function(done)
+  it('send encrypted file via channel',function(done)
   {
     let path = __dirname + "/testfile.x";
 
@@ -182,7 +183,7 @@ describe('Regression Tests',function()
       catch(e) { done(e); }
     });
   });
-  it('send encrypted file',function(done)
+  it('send encrypted file to all receivers',function(done)
   {
     let path = __dirname + "/testfile.x";
 
@@ -191,6 +192,22 @@ describe('Regression Tests',function()
       try
       {
         expect(res).to.not.equal(null);
+        done();
+      }
+      catch(e) { done(e); }
+    });
+  });
+*/
+  it('get metafiles task',function(done)
+  {
+    let path = __dirname + "/testfile.x";
+
+    psyloc.getMetafilesTask().then(function(res)
+    {
+      try
+      {
+        expect(res).to.not.equal(undefined);
+console.log("metafiles = ",JSON.stringify(res,null,2));
         done();
       }
       catch(e) { done(e); }

@@ -69,6 +69,7 @@ const addFilesRequest = Promise.promisify(function(url,body,auth,callback) { mkP
 const deleteTorrentRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'deleteTorrent',body,auth,callback); });
 const getChannelsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/channels',body,callback); });
 const getGroupsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/list',body,callback); });
+const getMetafilesTaskRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/meta/tasks',body,callback); });
 const getReceiversRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/receivers',body,callback); });
 const getServerIdentity = Promise.promisify(function(url,callback) { mkPsyloGetRequest(url + 'getServerIdentity',callback); });
 const getTokenRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getToken',body,auth,callback); });
@@ -117,11 +118,7 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
 });
 
 const deleteTorrent = Promise.coroutine(function*(url,infoHash,auth) { return yield deleteTorrentRequest(url,{ infoHash:infoHash },auth); });
-
-const getChannels = Promise.coroutine(function*(url,token,groupId)
-{ 
-  return yield getChannelsRequest(url,{ credentials:{ token:token }, groupMaskId:groupId });
-});
+const getChannels = Promise.coroutine(function*(url,token,groupId) { return yield getChannelsRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
 
 const getFileInfo = Promise.coroutine(function*(path)
 {
@@ -133,11 +130,14 @@ const getFileInfo = Promise.coroutine(function*(path)
 
 const getGroups = Promise.coroutine(function*(url,site,token) { return yield getGroupsRequest(url,{ credentials:{ token:token }, target:site}); });
 
-const getReceivers = Promise.coroutine(function*(url,token,groupId)
+const getMetafilesTask = Promise.coroutine(function*(url,token)
 { 
-  return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId });
+  let x = yield getMetafilesTaskRequest(url,{ token:token });
+
+  console.log(x);
 });
 
+const getReceivers = Promise.coroutine(function*(url,token,groupId) { return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
 const getToken = Promise.coroutine(function*(url,infoHash,auth) { return yield getTokenRequest(url,{},auth); });
 const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return yield getTorrentInfoRequest(url,{ infoHash:infoHash },auth); });
 const getTorrentList = Promise.coroutine(function*(url,auth) { return yield getTorrentListRequest(url,{},auth); });
@@ -227,6 +227,17 @@ module.exports = function(psyHost,apiHost,website)
       if(tokenInfo == null) tokenInfo = yield _getToken();
       if(tokenInfo == null || tokenInfo.info == null || tokenInfo.info.id == null) return null;
       return yield getGroups("https://" + apiHost + "/",website,tokenInfo.info.id);
+    }
+    catch(e) { return null; }
+  });
+
+  const _getMetafilesTask = Promise.coroutine(function*(tokenInfo)
+  {
+    try
+    {
+      if(tokenInfo == null) tokenInfo = yield _getToken();
+      if(tokenInfo == null || tokenInfo.info == null || tokenInfo.info.id == null) return null;
+      return yield getMetafilesTask("https://" + apiHost + "/",website,tokenInfo.info.id);
     }
     catch(e) { return null; }
   });
@@ -360,8 +371,9 @@ module.exports = function(psyHost,apiHost,website)
     findChannel:_findChannel,
     findGroup:_findGroup,
     getChannels:_getChannels,
-    getGroups:_getGroups,
     getFileInfo:getFileInfo,
+    getGroups:_getGroups,
+    getMetafilesTask:_getMetafilesTask,
     getReceivers:_getReceivers,
     getServerIdentity:_getServerIdentity,
     getToken:_getToken,
