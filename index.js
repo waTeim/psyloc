@@ -66,6 +66,7 @@ function mkESSRequest(url,body,callback)
 }
 
 const addFilesRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'addFiles',body,auth,callback); });
+const completeMetafilesTaskRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/meta/task/completed',body,callback); });
 const deleteTorrentRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'deleteTorrent',body,auth,callback); });
 const getChannelsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/channels',body,callback); });
 const getGroupsRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/group/list',body,callback); });
@@ -93,6 +94,7 @@ const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,toke
 
 const checkSend = Promise.coroutine(function*(url,fileSpecList,isEncrypted,auth) { return yield preFlightRequest(url,{ fileSpecList:fileSpecList, isEncrypted:isEncrypted },auth); });
 const checkReceive = Promise.coroutine(function*(url,sourceSize,isEncrypted,auth) { return yield preFlightRequest(url,{ sourceSize:sourceSize, isEncrypted:isEncrypted },auth); });
+const completeMetafilesTask = Promise.coroutine(function*(url,token,taskId) { return yield completeMetafilesTaskRequest(url,{ token:token, id:taskId }); });
 
 const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelIds,recipientIds,title,encrypted,serverIdentity,fileInfo)
 {
@@ -129,14 +131,7 @@ const getFileInfo = Promise.coroutine(function*(path)
 });
 
 const getGroups = Promise.coroutine(function*(url,site,token) { return yield getGroupsRequest(url,{ credentials:{ token:token }, target:site}); });
-
-const getMetafilesTask = Promise.coroutine(function*(url,token)
-{ 
-  let x = yield getMetafilesTaskRequest(url,{ token:token });
-
-  console.log(x);
-});
-
+const getMetafilesTask = Promise.coroutine(function*(url,token) { return yield getMetafilesTaskRequest(url,{ token:token }); });
 const getReceivers = Promise.coroutine(function*(url,token,groupId) { return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
 const getToken = Promise.coroutine(function*(url,infoHash,auth) { return yield getTokenRequest(url,{},auth); });
 const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return yield getTorrentInfoRequest(url,{ infoHash:infoHash },auth); });
@@ -161,6 +156,17 @@ module.exports = function(psyHost,apiHost,website)
   const _checkSend = Promise.coroutine(function*()
   {
     try { return yield checkSend("https://" + psyHost + ":20001/"); }
+    catch(e) { return null; }
+  });
+
+  const _completeMetafilesTask = Promise.coroutine(function*(taskId,tokenInfo)
+  {
+    try
+    {
+      if(tokenInfo == null) tokenInfo = yield _getToken();
+      if(tokenInfo == null || tokenInfo.info == null || tokenInfo.info.id == null) return null;
+      return yield completeMetafilesTask("https://" + apiHost + "/",tokenInfo.info.id,taskId);
+    }
     catch(e) { return null; }
   });
 
@@ -237,7 +243,7 @@ module.exports = function(psyHost,apiHost,website)
     {
       if(tokenInfo == null) tokenInfo = yield _getToken();
       if(tokenInfo == null || tokenInfo.info == null || tokenInfo.info.id == null) return null;
-      return yield getMetafilesTask("https://" + apiHost + "/",website,tokenInfo.info.id);
+      return yield getMetafilesTask("https://" + apiHost + "/",tokenInfo.info.id);
     }
     catch(e) { return null; }
   });
@@ -367,6 +373,7 @@ module.exports = function(psyHost,apiHost,website)
     addFiles:_addFiles,
     checkSend:_checkSend,
     checkReceive:_checkReceive,
+    completeMetafilesTask:_completeMetafilesTask,
     deleteTorrent:_deleteTorrent,
     findChannel:_findChannel,
     findGroup:_findGroup,
