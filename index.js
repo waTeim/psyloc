@@ -96,7 +96,7 @@ const checkSend = Promise.coroutine(function*(url,fileSpecList,isEncrypted,auth)
 const checkReceive = Promise.coroutine(function*(url,sourceSize,isEncrypted,auth) { return yield preFlightRequest(url,{ sourceSize:sourceSize, isEncrypted:isEncrypted },auth); });
 const completeMetafilesTask = Promise.coroutine(function*(url,token,taskId) { return yield completeMetafilesTaskRequest(url,{ token:token, id:taskId }); });
 
-const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelIds,recipientIds,title,encrypted,serverIdentity,fileInfo)
+const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelIds,recipientIds,recipientEmails,title,encrypted,serverIdentity,fileInfo)
 {
   let credentials =
   { 
@@ -111,7 +111,8 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
     files:[ { fileName:fileInfo.path, fileSize:"" + fileInfo.size }],
     groupMaskId:groupId,
     memoTitle:title,
-    recipientIds:recipientIds
+    recipientIds:recipientIds,
+    recipientEmails:recipientEmails
   }
 
   let body = { credentials:credentials, transaction:transaction };
@@ -141,6 +142,7 @@ const stat = Promise.promisify(fs.stat);
 
 module.exports = function(psyHost,apiHost,website)
 {
+console.log(psyHost,apiHost,website);
   const _addFiles = Promise.coroutine(function*(fileSpecList,externalTransactionID,token,keys,peers,torrentName)
   {
     try { return yield addFiles("https://" + psyHost + ":20001/",fileSpecList,externalTransactionID,token,keys,peers,torrentName); }
@@ -286,7 +288,7 @@ module.exports = function(psyHost,apiHost,website)
     catch(e) { return null; }
   });
 
-  const _getTransactionForSend = Promise.coroutine(function*(group,channelName,recipientIds,title,encrypted,path,tokenInfo)
+  const _getTransactionForSend = Promise.coroutine(function*(group,channelName,recipientIds,recipientEmails,title,encrypted,path,tokenInfo)
   {
     try
     {
@@ -313,14 +315,17 @@ module.exports = function(psyHost,apiHost,website)
         if(channelInfo == null) return null;
         channelIds.push(channelInfo.id);
       }
-      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelIds,recipientIds,title,encrypted,serverIdentity.identity,fileInfo);
+      return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelIds,recipientIds,recipientEmails,title,encrypted,serverIdentity.identity,fileInfo);
     }
-    catch(e) { console.log(e); return null; }
+    catch(e)
+    { 
+      throw("transaction failed: " + e);
+    }
   });
 
   const _getTransactionForChannelSend = Promise.coroutine(function*(groupName,channelName,title,encrypted,path,tokenInfo)
   {
-    return _getTransactionForSend({ groupName:groupName },channelName,[],title,encrypted,path,tokenInfo);
+    return _getTransactionForSend({ groupName:groupName },channelName,[],[],title,encrypted,path,tokenInfo);
   });
 
   const _getTransactionForSendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,path,tokenInfo)
@@ -328,15 +333,60 @@ module.exports = function(psyHost,apiHost,website)
 
     let groupInfo = yield _findGroup(groupName,tokenInfo);
 
-    if(groupInfo == null) return null;
+    if(groupInfo == null) throw("group not found");
 
     let receivers = yield getReceivers("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
     let receiverIds = [];
 
-    if(receivers == null || receivers.labelValues == null) return null;
+    if(receivers == null || receivers.labelValues == null) throw("no recipients found in group");
     for(let i = 0;i < receivers.labelValues.length;i++) receiverIds.push(receivers.labelValues[i].id);
 
-    return _getTransactionForSend({ groupInfo:groupInfo },"",receiverIds,title,encrypted,path,tokenInfo);
+    return _getTransactionForSend({ groupInfo:groupInfo },"",receiverIds,[],title,encrypted,path,tokenInfo);
+  });
+
+  function lexigraphic(a,b)
+  {
+    if(a < b) return -1;
+    else if(a > b) return 1;
+    return 0;
+  }
+
+  const _getTransactionForSendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,path,tokenInfo)
+  {
+
+    let groupInfo = yield _findGroup(groupName,tokenInfo);
+
+    if(groupInfo == null) throw("group not found");
+
+    /*
+    let receivers = yield getReceivers("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
+    let rx = [];
+    let receiverIds = [];
+
+    if(receivers == null || receivers.labelValues == null) throw("no recipients found in group");
+    for(let i = 0;i < receivers.labelValues.length;i++) 
+    {
+    */
+    //  let email = receivers.labelValues[i].label.replace(/.*\((.*)\).*/g,'$1');
+    /*
+      let ref = { email:email, id:receivers.labelValues[i].id };
+
+      rx.push(ref);
+    }
+    rx = rx.sort(function(a,b) { return lexigraphic(a.email,b.email); });
+    rlist = rlist.sort(lexigraphic);
+
+    let rxIndex = 0;
+
+    for(let i = 0;i < rlist.length;i++)
+    {
+       while(rxIndex < rx.length && rx[rxIndex].email != rlist[i]) rxIndex++;
+       if(rxIndex >= rx.length || rx[rxIndex].email != rlist[i]) throw("recipient email not found in group");
+       receiverIds.push(rx[rxIndex].id);
+    }
+    */
+
+    return _getTransactionForSend({ groupInfo:groupInfo },"",[],rlist,title,encrypted,path,tokenInfo);
   });
 
   const _sendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,path)
@@ -345,7 +395,6 @@ module.exports = function(psyHost,apiHost,website)
     let transactionInfo = yield _getTransactionForSendToAllReceivers(groupName,title,encrypted,path,tokenInfo);
     let keys = [];
 
-    if(transactionInfo == null) return null;
     if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
     {
       for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
@@ -360,7 +409,20 @@ module.exports = function(psyHost,apiHost,website)
     let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,title,encrypted,path,tokenInfo);
     let keys = [];
 
-    if(transactionInfo == null) return null;
+    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    {
+      for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
+    }
+
+    return yield _addFiles([ path ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
+  });
+
+  const _sendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,path)
+  {
+    let tokenInfo = yield _getToken();
+    let transactionInfo = yield _getTransactionForSendToRlist(groupName,rlist,title,encrypted,path,tokenInfo);
+    let keys = [];
+
     if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
     {
       for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
@@ -387,6 +449,7 @@ module.exports = function(psyHost,apiHost,website)
     getTorrentInfo:_getTorrentInfo,
     getTorrentList:_getTorrentList,
     sendToAllReceivers:_sendToAllReceivers,
+    sendToRlist:_sendToRlist,
     sendViaChannel:_sendViaChannel
   }
 };
