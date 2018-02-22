@@ -142,7 +142,6 @@ const stat = Promise.promisify(fs.stat);
 
 module.exports = function(psyHost,apiHost,website)
 {
-console.log(psyHost,apiHost,website);
   const _addFiles = Promise.coroutine(function*(fileSpecList,externalTransactionID,token,keys,peers,torrentName)
   {
     try { return yield addFiles("https://" + psyHost + ":20001/",fileSpecList,externalTransactionID,token,keys,peers,torrentName); }
