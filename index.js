@@ -4,6 +4,8 @@ const fs = require('fs');
 const request = require('request');
 const Promise = require('bluebird');
 const path = require('path');
+const winston = require('winston');
+
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
@@ -105,7 +107,7 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
     uuid:serverIdentity.uuid,
     hostid:serverIdentity.hostId
   };
-  let transaction =
+  let transactionDesc =
   { 
     channelIds:channelIds,
     encrypted:encrypted,
@@ -116,9 +118,11 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
     recipientEmails:recipientEmails
   }
 
-  let body = { credentials:credentials, transaction:transaction };
-
-  return yield getTransactionRequest(url,body);
+  let body = { credentials:credentials, transaction:transactionDesc };
+  let transactionInfo =  yield getTransactionRequest(url,body);
+  
+  if(transactionInfo.transactions[0] == null) throw("getTransaction failed",transactionInfo);
+  return transactionInfo;
 });
 
 const deleteTorrent = Promise.coroutine(function*(url,infoHash,auth) { return yield deleteTorrentRequest(url,{ infoHash:infoHash },auth); });
@@ -160,8 +164,14 @@ const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return y
 const getTorrentList = Promise.coroutine(function*(url,auth) { return yield getTorrentListRequest(url,{},auth); });
 
 
-module.exports = function(psyHost,apiHost,website)
+module.exports = function(psyHost,apiHost,website,options)
 {
+  let logLevel = "error";
+
+  if(options != null && options.debug == true) logLevel = "debug";
+
+  var logger = new (winston.Logger)({ transports: [ new winston.transports.Console({level: logLevel })]});
+
   const _addFiles = Promise.coroutine(function*(fileSpecList,externalTransactionID,token,keys,peers,torrentName)
   {
     try { return yield addFiles("https://" + psyHost + ":20001/",fileSpecList,externalTransactionID,token,keys,peers,torrentName); }
@@ -320,18 +330,32 @@ module.exports = function(psyHost,apiHost,website)
       let channelIds = [];
 
       if(groupInfo == null && group.groupName != null) groupInfo = yield _findGroup(group.groupName,tokenInfo);
-      if(groupInfo == null) return null;
+      if(groupInfo == null) 
+      {
+        logger.error(`group ${group.groupName} not found`);
+        return null;
+      }
+      else logger.debug(`found group ${group.groupName}`);
 
       let channels = yield getChannels("https://" + apiHost + "/",tokenInfo.info.id,groupInfo.id);
 
       if(channelName != "")
       {
-        if(channels == null || channels.labelValues == null) return null;
+        if(channels == null || channels.labelValues == null) 
+        {
+          logger.error("unable to obtain channel list");
+          return null;
+        }
         for(let i = 0;i < channels.labelValues.length;i++)
         {
            if(channels.labelValues[i].label == channelName) channelInfo = channels.labelValues[i];
         }
-        if(channelInfo == null) return null;
+        if(channelInfo == null) 
+        {
+          logger.error(`unable to find channel ${channelName} info`);
+          return null;
+        }
+        else logger.debug(`found info for channel ${channelName}`);
         channelIds.push(channelInfo.id);
       }
       return yield getTransaction("https://" + apiHost + "/",website,tokenInfo.info.id,groupInfo.id,channelIds,recipientIds,recipientEmails,title,encrypted,serverIdentity.identity,fileInfo);
@@ -372,7 +396,6 @@ module.exports = function(psyHost,apiHost,website)
 
   const _getTransactionForSendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,filePath,tokenInfo)
   {
-
     let groupInfo = yield _findGroup(groupName,tokenInfo);
 
     if(groupInfo == null) throw("group not found");
@@ -426,14 +449,23 @@ module.exports = function(psyHost,apiHost,website)
   {
     let tokenInfo = yield _getToken();
     let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,title,encrypted,filePath,tokenInfo);
-    let keys = [];
 
-    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    if(transactionInfo != null) 
     {
-      for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
-    }
+      let keys = [];
 
-    return yield _addFiles([ filePath ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
+      if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+      {
+        for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
+      }
+
+      return yield _addFiles([ filePath ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
+    }
+    else 
+    {
+      logger.error("transaction request failed");
+      return null;
+    }
   });
 
   const _sendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,filePath)
