@@ -6,7 +6,6 @@ const Promise = require('bluebird');
 const path = require('path');
 const winston = require('winston');
 
-
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 function getCredentials()
@@ -32,6 +31,25 @@ function getCredentials()
   }
   return { username:username, password:password};
 }
+
+const readdir = Promise.promisify(fs.readdir);
+const stat = Promise.promisify(fs.stat);
+
+const dirSize = Promise.coroutine(function*(dir)
+{
+  let files = yield readdir(dir);
+  let sum = 0;
+
+  for(let i = 0;i < files.length;i++)
+  {
+    let filePath = path.join(dir,files[i]);
+    let stats = yield stat(filePath);
+
+    if(stats.isDirectory()) sum += yield dirSize(filePath);
+    else if(stats.isFile()) sum += stats.size;
+  }
+  return sum;
+});
 
 function mkPsyloGetRequest(url,callback)
 {
@@ -80,6 +98,7 @@ const getTokenRequest = Promise.promisify(function(url,body,auth,callback) { mkP
 const getTorrentInfoRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getTorrentInfo',body,auth,callback); });
 const getTorrentListRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getTorrentList',body,auth,callback); });
 const getTransactionRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/create',body,callback); });
+const getTransactionStatusRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/get/transaction',body,callback); });
 const preFlightRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'preFlight',body,auth,callback); });
 
 const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,token,keys,peers,torrentName,auth)
@@ -98,6 +117,24 @@ const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,toke
 const checkSend = Promise.coroutine(function*(url,fileSpecList,isEncrypted,auth) { return yield preFlightRequest(url,{ fileSpecList:fileSpecList, isEncrypted:isEncrypted },auth); });
 const checkReceive = Promise.coroutine(function*(url,sourceSize,isEncrypted,auth) { return yield preFlightRequest(url,{ sourceSize:sourceSize, isEncrypted:isEncrypted },auth); });
 const completeMetafilesTask = Promise.coroutine(function*(url,token,taskId) { return yield completeMetafilesTaskRequest(url,{ token:token, id:taskId }); });
+const deleteTorrent = Promise.coroutine(function*(url,infoHash,auth) { return yield deleteTorrentRequest(url,{ infoHash:infoHash },auth); });
+const getChannels = Promise.coroutine(function*(url,token,groupId) { return yield getChannelsRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
+
+const getFileInfo = Promise.coroutine(function*(filePath)
+{
+  let stats = yield stat(filePath);
+
+  stats.path = filePath;
+  if(stats.isDirectory()) stats.size = yield dirSize(filePath);
+  return stats;
+});
+
+const getGroups = Promise.coroutine(function*(url,site,token) { return yield getGroupsRequest(url,{ credentials:{ token:token }, target:site}); });
+const getMetafilesTask = Promise.coroutine(function*(url,token) { return yield getMetafilesTaskRequest(url,{ token:token }); });
+const getReceivers = Promise.coroutine(function*(url,token,groupId) { return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
+const getToken = Promise.coroutine(function*(url,infoHash,auth) { return yield getTokenRequest(url,{},auth); });
+const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return yield getTorrentInfoRequest(url,{ infoHash:infoHash },auth); });
+const getTorrentList = Promise.coroutine(function*(url,auth) { return yield getTorrentListRequest(url,{},auth); });
 
 const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channelIds,recipientIds,recipientEmails,title,encrypted,serverIdentity,fileInfo)
 {
@@ -125,44 +162,7 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
   return transactionInfo;
 });
 
-const deleteTorrent = Promise.coroutine(function*(url,infoHash,auth) { return yield deleteTorrentRequest(url,{ infoHash:infoHash },auth); });
-const getChannels = Promise.coroutine(function*(url,token,groupId) { return yield getChannelsRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
-
-const readdir = Promise.promisify(fs.readdir);
-const stat = Promise.promisify(fs.stat);
-
-const dirSize = Promise.coroutine(function*(dir)
-{
-  let files = yield readdir(dir);
-  let sum = 0;
-
-  for(let i = 0;i < files.length;i++)
-  {
-    let filePath = path.join(dir,files[i]);
-    let stats = yield stat(filePath);
-
-    if(stats.isDirectory()) sum += yield dirSize(filePath);
-    else if(stats.isFile()) sum += stats.size;
-  }
-  return sum;
-});
-
-const getFileInfo = Promise.coroutine(function*(filePath)
-{
-  let stats = yield stat(filePath);
-
-  stats.path = filePath;
-  if(stats.isDirectory()) stats.size = yield dirSize(filePath);
-  return stats;
-});
-
-const getGroups = Promise.coroutine(function*(url,site,token) { return yield getGroupsRequest(url,{ credentials:{ token:token }, target:site}); });
-const getMetafilesTask = Promise.coroutine(function*(url,token) { return yield getMetafilesTaskRequest(url,{ token:token }); });
-const getReceivers = Promise.coroutine(function*(url,token,groupId) { return yield getReceiversRequest(url,{ credentials:{ token:token }, groupMaskId:groupId }); });
-const getToken = Promise.coroutine(function*(url,infoHash,auth) { return yield getTokenRequest(url,{},auth); });
-const getTorrentInfo = Promise.coroutine(function*(url,infoHash,auth) { return yield getTorrentInfoRequest(url,{ infoHash:infoHash },auth); });
-const getTorrentList = Promise.coroutine(function*(url,auth) { return yield getTorrentListRequest(url,{},auth); });
-
+const getTransactionStatus = Promise.coroutine(function*(url,token,transactionId) { return yield getTransactionStatusRequest(url,{ token:token, transactionId:transactionId }); });
 
 module.exports = function(psyHost,apiHost,website,options)
 {
@@ -482,6 +482,17 @@ module.exports = function(psyHost,apiHost,website,options)
     return yield _addFiles([ filePath ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
   });
 
+  const _getTransactionStatus = Promise.coroutine(function*(transactionId,tokenInfo)
+  {
+    if(tokenInfo == null) tokenInfo = yield _getToken();
+
+    try { return yield getTransactionStatus("https://" + apiHost + "/",tokenInfo.info.id,transactionId); }
+    catch(e)
+    {
+      throw("failed to get transaction info: " + e);
+    }
+  });
+
   return {
     addFiles:_addFiles,
     checkSend:_checkSend,
@@ -499,6 +510,7 @@ module.exports = function(psyHost,apiHost,website,options)
     getToken:_getToken,
     getTorrentInfo:_getTorrentInfo,
     getTorrentList:_getTorrentList,
+    getTransactionStatus:_getTransactionStatus,
     sendToAllReceivers:_sendToAllReceivers,
     sendToRlist:_sendToRlist,
     sendViaChannel:_sendViaChannel
