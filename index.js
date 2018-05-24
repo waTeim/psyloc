@@ -25,8 +25,8 @@ function getCredentials()
 
     if(lineComponent[0].split('@')[1] == 'localhost')
     {
-      username = lineComponent[0].split('@')[0];
-      password = lineComponent[1];
+      username = lineComponent.slice(0,lineComponent.length - 1).join('').split('@')[0];
+      password = lineComponent[lineComponent.length - 1];
     }
   }
   return { username:username, password:password};
