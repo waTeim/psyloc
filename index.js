@@ -10,9 +10,9 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 function getCredentials()
 {
-  var password;
-  var username;
-  var homeDir;
+  let password;
+  let username;
+  let homeDir;
 
   if(process.env.HOMEPATH) homeDir = process.env.HOMEDRIVE + process.env.HOMEPATH;
   else homeDir = process.env.HOME;
@@ -21,12 +21,12 @@ function getCredentials()
 
   for(var i = 0;i < lines.length;i++)
   {
-    var lineComponent = lines[i].split(' ');
-
-    if(lineComponent[0].split('@')[1] == 'localhost')
+    let lineComponents = lines[i].split('@');
+  
+    if(lineComponents.length == 2 && lineComponents[1].split(' ')[0] == 'localhost')
     {
-      username = lineComponent.slice(0,lineComponent.length - 1).join(' ').split('@')[0];
-      password = lineComponent[lineComponent.length - 1];
+      username = lineComponents[0];
+      password = lineComponents[1].split(' ')[1];
     }
   }
   return { username:username, password:password};
