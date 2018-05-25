@@ -19,14 +19,20 @@ function getCredentials()
 
   var lines = fs.readFileSync(homeDir + "/.dgd/pw").toString().replace(/\r/g,"").split('\n');
 
-  for(var i = 0;i < lines.length;i++)
+  for(let i = 0;i < lines.length;i++)
   {
-    let lineComponents = lines[i].split('@');
-  
-    if(lineComponents.length == 2 && lineComponents[1].split(' ')[0] == 'localhost')
+    let lineComponents = lines[i].split(' ');
+
+    if(lineComponents.length >= 2)
     {
-      username = lineComponents[0];
-      password = lineComponents[1].split(' ')[1];
+      let c1 = lineComponents.splice(0,lineComponents.length - 1).join(' ');
+      let c2 = c1.split('@');
+
+      if(c2[1] == 'localhost')
+      {
+        username = c2[0];
+        password = lineComponents[lineComponents.length - 1];
+      }
     }
   }
   return { username:username, password:password};
