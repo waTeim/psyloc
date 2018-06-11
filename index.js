@@ -5,6 +5,7 @@ const request = require('request');
 const Promise = require('bluebird');
 const path = require('path');
 const winston = require('winston');
+const moment = require('moment');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
@@ -105,6 +106,7 @@ const getTorrentInfoRequest = Promise.promisify(function(url,body,auth,callback)
 const getTorrentListRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'getTorrentList',body,auth,callback); });
 const getTransactionRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/create',body,callback); });
 const getTransactionStatusRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/get/transaction',body,callback); });
+const getTransactionHistoryRequest = Promise.promisify(function(url,body,callback) { mkESSRequest(url + 'console/services/ext/xl/get/history',body,callback); });
 const preFlightRequest = Promise.promisify(function(url,body,auth,callback) { mkPsyloPostRequest(url + 'preFlight',body,auth,callback); });
 
 const addFiles = Promise.coroutine(function*(url,fileSpecList,transactionId,token,keys,peers,torrentName,auth)
@@ -169,6 +171,26 @@ const getTransaction = Promise.coroutine(function*(url,site,token,groupId,channe
 });
 
 const getTransactionStatus = Promise.coroutine(function*(url,token,transactionId) { return yield getTransactionStatusRequest(url,{ token:token, transactionId:transactionId }); });
+
+const getTransactionHistory = Promise.coroutine(function*(url,token,hostId,fromDate,toDate)
+{ 
+  if(toDate != null && fromDate != null)
+  {
+     let fromDateString = moment(fromDate).format();
+     let toDateString = moment(toDate).format();
+     let body = { token:token, hostId:hostId, fromDate:fromDateString, toDate:toDateString };
+
+     return yield getTransactionHistoryRequest(url,body);
+  }
+  else if(fromDate != null)
+  {
+     let fromDateString = moment(fromDate).format();
+     let body = { token:token, hostId:hostId, fromDate:fromDateString };
+
+     return yield getTransactionHistoryRequest(url,{ token:token, hostId:hostId, fromDate:fromDateString });
+  }
+  return null;
+});
 
 module.exports = function(psyHost,apiHost,website,options)
 {
@@ -499,6 +521,23 @@ module.exports = function(psyHost,apiHost,website,options)
     }
   });
 
+  const _getTransactionHistory = Promise.coroutine(function*(fromDate,toDate,tokenInfo)
+  {
+    let serverIdentity = yield _getServerIdentity();
+
+    if(tokenInfo == null) tokenInfo = yield _getToken();
+    if(serverIdentity == null) throw("failed to get hostId");
+    if(tokenInfo == null) throw("failed to get token");
+    try
+    { 
+      return yield getTransactionHistory("https://" + apiHost + "/",tokenInfo.info.id,serverIdentity.identity.hostId,fromDate,toDate);
+    }
+    catch(e)
+    {
+      throw("failed to get transaction history: " + e);
+    }
+  });
+
   return {
     addFiles:_addFiles,
     checkSend:_checkSend,
@@ -516,6 +555,7 @@ module.exports = function(psyHost,apiHost,website,options)
     getToken:_getToken,
     getTorrentInfo:_getTorrentInfo,
     getTorrentList:_getTorrentList,
+    getTransactionHistory:_getTransactionHistory,
     getTransactionStatus:_getTransactionStatus,
     sendToAllReceivers:_sendToAllReceivers,
     sendToRlist:_sendToRlist,
