@@ -459,13 +459,13 @@ module.exports = function(psyHost,apiHost,website,options)
     return _getTransactionForSend({ groupInfo:groupInfo },"",[],rlist,title,encrypted,filePath,tokenInfo);
   });
 
-  const _sendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,filePath)
+  const _sendToAllReceivers = Promise.coroutine(function*(groupName,title,encrypted,ignoreKeys,filePath)
   {
     let tokenInfo = yield _getToken();
     let transactionInfo = yield _getTransactionForSendToAllReceivers(groupName,title,encrypted,filePath,tokenInfo);
     let keys = [];
 
-    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    if(transactionInfo.keys != null && transactionInfo.keys.length != 0 && !ignoreKeys)
     {
       for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
     }
@@ -473,7 +473,7 @@ module.exports = function(psyHost,apiHost,website,options)
     return yield _addFiles([ filePath ],transactionInfo.transactions[0].transactionId,tokenInfo.info.id,keys,transactionInfo.peers);
   });
 
-  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,title,encrypted,filePath)
+  const _sendViaChannel = Promise.coroutine(function*(groupName,channelName,title,encrypted,ignoreKeys,filePath)
   {
     let tokenInfo = yield _getToken();
     let transactionInfo = yield _getTransactionForChannelSend(groupName,channelName,title,encrypted,filePath,tokenInfo);
@@ -482,7 +482,7 @@ module.exports = function(psyHost,apiHost,website,options)
     {
       let keys = [];
 
-      if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+      if(transactionInfo.keys != null && transactionInfo.keys.length != 0 && !ignoreKeys)
       {
         for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
       }
@@ -496,13 +496,13 @@ module.exports = function(psyHost,apiHost,website,options)
     }
   });
 
-  const _sendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,filePath)
+  const _sendToRlist = Promise.coroutine(function*(groupName,rlist,title,encrypted,ignoreKeys,filePath)
   {
     let tokenInfo = yield _getToken();
     let transactionInfo = yield _getTransactionForSendToRlist(groupName,rlist,title,encrypted,filePath,tokenInfo);
     let keys = [];
 
-    if(transactionInfo.keys != null && transactionInfo.keys.length != 0)
+    if(transactionInfo.keys != null && transactionInfo.keys.length != 0 && !ignoreKeys)
     {
       for(let i = 0;i < transactionInfo.keys.length;i++) keys.push(transactionInfo.keys[i].publicKey);
     }
