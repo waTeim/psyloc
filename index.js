@@ -198,7 +198,7 @@ module.exports = function(psyHost,apiHost,website,options)
 
   if(options != null && options.debug == true) logLevel = "debug";
 
-  var logger = new (winston.Logger)({ transports: [ new winston.transports.Console({level: logLevel })]});
+  var logger = winston.createLogger({ transports: [ new winston.transports.Console({level: logLevel })]});
 
   const _addFiles = Promise.coroutine(function*(fileSpecList,externalTransactionID,token,keys,peers,torrentName)
   {

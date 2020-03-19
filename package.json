@@ -7,7 +7,7 @@
     "chai": "x",
     "moment": "^2.22.2",
     "request": "x",
-    "winston": "^2.4.2"
+    "winston": "^3.0.0"
   },
   "main": "index.js",
   "repository": {
